@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
 const env = require('./config/env');
+const db = require('./config/db');
+const logger = require('./utils/logger');
 const routes = require('./routes');
 const errorHandler = require('./middleware/errorHandler');
 const { apiLimiter } = require('./middleware/rateLimit');
@@ -27,6 +29,23 @@ app.use(cookieParser());
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.get('/health', (req, res) => {
   res.json({ data: { ok: true, uptime: process.uptime() } });
+});
+app.use('/api', async (req, res, next) => {
+  try {
+    await db.connect();
+    return next();
+  } catch (error) {
+    logger.error(
+      { error: error.message, code: error.code, path: req.path },
+      'MongoDB connection failed before API request'
+    );
+    return res.status(503).json({
+      error: {
+        code: 'DATABASE_UNAVAILABLE',
+        message: 'Database is temporarily unavailable',
+      },
+    });
+  }
 });
 app.use('/api', apiLimiter, routes);
 app.use((req, res) => {
