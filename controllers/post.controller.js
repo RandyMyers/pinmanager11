@@ -9,6 +9,7 @@ const { dedupeKey } = require('../utils/hash');
 const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
 const { ok } = require('../utils/response');
+const { assertRequiredPinFields } = require('../utils/pinContent');
 
 const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -121,15 +122,22 @@ const create = asyncHandler(async (req, res) => {
     throw new AppError(400, 'VALIDATION', 'scheduledAt must be in the future');
   }
 
-  const key = dedupeKey(account._id, asset.contentHash, req.body.link);
+  const content = {
+    title: req.body.title ?? asset.title,
+    description: req.body.description ?? asset.description,
+    altText: req.body.altText ?? asset.altText,
+    link: req.body.link ?? asset.link,
+  };
+  const key = dedupeKey(account._id, asset.contentHash, content.link);
   const status = req.body.status || (req.body.scheduledAt ? 'scheduled' : 'draft');
+  if (status === 'scheduled') assertRequiredPinFields(content);
   const guardrails = await runGuardrails(req.user, account, {
     scheduledAt: req.body.scheduledAt,
     status,
     dedupeKey: key,
     contentHash: asset.contentHash,
-    link: req.body.link,
-    title: req.body.title,
+    link: content.link,
+    title: content.title,
   });
   if (guardrails.blocked) {
     throw new AppError(409, 'GUARDRAIL', 'Post blocked by guardrails', guardrails);
@@ -141,10 +149,10 @@ const create = asyncHandler(async (req, res) => {
     board: board?._id,
     pinterestBoardId: board.pinterestBoardId,
     pinterestSectionId: req.body.pinterestSectionId,
-    title: req.body.title,
-    description: req.body.description,
-    altText: req.body.altText,
-    link: req.body.link,
+    title: content.title,
+    description: content.description,
+    altText: content.altText,
+    link: content.link,
     asset: asset._id,
     mediaType: asset.resourceType,
     coverAsset: coverAsset?._id,
@@ -224,6 +232,7 @@ const update = asyncHandler(async (req, res) => {
   if (post.status === 'scheduled' && !post.scheduledAt) {
     throw new AppError(400, 'VALIDATION', 'A scheduled post requires scheduledAt');
   }
+  if (post.status === 'scheduled') assertRequiredPinFields(post);
   if (post.status === 'scheduled' && new Date(post.scheduledAt) <= new Date()) {
     throw new AppError(400, 'VALIDATION', 'scheduledAt must be in the future');
   }
@@ -251,6 +260,7 @@ const publishNow = asyncHandler(async (req, res) => {
   if (['publishing', 'published', 'cancelled'].includes(post.status)) {
     throw new AppError(409, 'LOCKED', 'Post cannot be published now');
   }
+  assertRequiredPinFields(post);
   const account = await loadOwnedAccount(req.user._id, post.account);
   const guardrails = await runGuardrails(req.user, account, {
     scheduledAt: new Date(),
@@ -269,6 +279,7 @@ const publishNow = asyncHandler(async (req, res) => {
 const retry = asyncHandler(async (req, res) => {
   const post = await Post.findOne({ _id: req.params.id, owner: req.user._id, status: 'failed' });
   if (!post) throw new AppError(404, 'NOT_FOUND', 'Failed post not found');
+  assertRequiredPinFields(post);
   if (
     post.lastError?.kind === 'PUBLISH_OUTCOME_UNKNOWN' &&
     req.body?.confirmOutcomeUnknown !== true

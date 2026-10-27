@@ -14,6 +14,10 @@ const assetSchema = new mongoose.Schema(
     contentHash: String,
     originalFilename: String,
     tags: [String],
+    title: { type: String, maxlength: 100 },
+    description: { type: String, maxlength: 800 },
+    altText: { type: String, maxlength: 500 },
+    link: { type: String, maxlength: 2048 },
   },
   { timestamps: true }
 );

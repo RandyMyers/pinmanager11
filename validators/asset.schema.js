@@ -1,10 +1,29 @@
 const { z } = require('zod');
 
+const optionalHttpUrl = z.string().max(2048).refine((value) => {
+  if (!value) return true;
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}, 'Link must be an http(s) URL');
+
 const register = z.object({
   body: z.object({
     publicId: z.string().min(1).max(500),
     originalFilename: z.string().max(255).optional(),
   }),
+});
+
+const update = z.object({
+  params: z.object({ id: z.string().regex(/^[a-f\d]{24}$/i) }),
+  body: z.object({
+    title: z.string().max(100).optional(),
+    description: z.string().max(800).optional(),
+    altText: z.string().max(500).optional(),
+    link: optionalHttpUrl.optional(),
+  }).strict().refine((body) => Object.keys(body).length > 0, 'At least one asset field is required'),
 });
 
 const sign = z.object({
@@ -35,4 +54,4 @@ const list = z.object({
   }),
 });
 
-module.exports = { sign, register, importUrl, list };
+module.exports = { sign, register, update, importUrl, list };

@@ -27,6 +27,14 @@ const sign = asyncHandler(async (req, res) => {
   return ok(res, cloudinaryService.signUpload({ ...(req.body || {}), ownerId: req.user._id }));
 });
 
+const update = asyncHandler(async (req, res) => {
+  const asset = await Asset.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!asset) throw new AppError(404, 'NOT_FOUND', 'Asset not found');
+  Object.assign(asset, req.body);
+  await asset.save();
+  return ok(res, asset);
+});
+
 const register = asyncHandler(async (req, res) => {
   const { publicId, originalFilename } = req.body;
   if (!publicId) throw new AppError(400, 'VALIDATION', 'publicId is required');
@@ -86,4 +94,4 @@ const remove = asyncHandler(async (req, res) => {
   return ok(res, { success: true });
 });
 
-module.exports = { sign, register, importUrl, list, remove };
+module.exports = { sign, register, update, importUrl, list, remove };

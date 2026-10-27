@@ -3,6 +3,7 @@ const pinterestClient = require('./pinterestClient');
 const cloudinaryService = require('./cloudinaryService');
 const AppError = require('../utils/AppError');
 const env = require('../config/env');
+const { assertRequiredPinFields } = require('../utils/pinContent');
 
 function trialGuard(account) {
   if (account.env === 'production' && !env.PINTEREST_STANDARD_APPROVED) {
@@ -16,6 +17,7 @@ function trialGuard(account) {
 
 async function createImagePin(account, post, asset) {
   trialGuard(account);
+  assertRequiredPinFields(post);
   const client = await pinterestClient.forAccount(account);
   const url = cloudinaryService.buildPinterestUrl(asset.cloudinaryPublicId, asset.secureUrl);
   const body = {
@@ -48,6 +50,7 @@ async function createImagePin(account, post, asset) {
 
 async function createVideoPin(account, post, asset, coverAsset) {
   trialGuard(account);
+  assertRequiredPinFields(post);
   const client = await pinterestClient.forAccount(account);
   const { data: media } = await client.post('/media', { media_type: 'video' });
   const fileRes = await axios.get(asset.secureUrl, { responseType: 'arraybuffer', timeout: 120000 });

@@ -14,6 +14,7 @@ const { dedupeKey } = require('../utils/hash');
 const asyncHandler = require('../utils/asyncHandler');
 const AppError = require('../utils/AppError');
 const { ok } = require('../utils/response');
+const { missingRequiredPinFields } = require('../utils/pinContent');
 
 async function loadAccount(userId, accountId) {
   const account = await PinterestAccount.findOne({
@@ -31,11 +32,18 @@ function applyTemplate(template = {}, asset, index) {
       .replaceAll('{n}', String(index + 1))
       .replaceAll('{filename}', asset.originalFilename || '');
   return {
-    title: replace(template.title).slice(0, 100),
-    description: replace(template.description).slice(0, 800),
-    link: replace(template.link).slice(0, 2048),
-    altText: replace(template.altText).slice(0, 500),
+    title: (template.title ? replace(template.title) : asset.title || '').slice(0, 100),
+    description: (template.description ? replace(template.description) : asset.description || '').slice(0, 800),
+    link: (template.link ? replace(template.link) : asset.link || '').slice(0, 2048),
+    altText: (template.altText ? replace(template.altText) : asset.altText || '').slice(0, 500),
   };
+}
+
+function addRequiredContentErrors(row) {
+  for (const field of missingRequiredPinFields(row.data)) {
+    const label = field === 'altText' ? 'alt text' : field;
+    row.errors.push(`${label} is required`);
+  }
 }
 
 async function resolveBoard(account, boardValue) {
@@ -128,6 +136,7 @@ async function enrichRows(user, accountsById, rows, scheduleRule) {
       if (data.altText && (typeof data.altText !== 'string' || data.altText.length > 500)) {
         row.errors.push('alt_text must be text up to 500 characters');
       }
+      addRequiredContentErrors(row);
       if (data.link) {
         try {
           if (data.link.length > 2048 || !['http:', 'https:'].includes(new URL(data.link).protocol)) {
@@ -257,6 +266,7 @@ async function revalidateBatch(batch, userId) {
     if (data.altText && (typeof data.altText !== 'string' || data.altText.length > 500)) {
       row.errors.push('alt_text must be text up to 500 characters');
     }
+    addRequiredContentErrors(row);
     if (data.link) {
       try {
         if (data.link.length > 2048 || !['http:', 'https:'].includes(new URL(data.link).protocol)) {
@@ -416,6 +426,10 @@ const previewCsv = asyncHandler(async (req, res) => {
       }).sort({ createdAt: -1 });
       if (!asset) row.errors.push(`No uploaded asset matching ${row.data.imageFile}`);
       else {
+        row.data.title ||= asset.title;
+        row.data.description ||= asset.description;
+        row.data.altText ||= asset.altText;
+        row.data.link ||= asset.link;
         row.data.assetId = String(asset._id);
         row.data.contentHash = asset.contentHash;
         row.data.dedupeKey = dedupeKey(account._id, asset.contentHash, row.data.link);
