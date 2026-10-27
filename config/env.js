@@ -45,10 +45,18 @@ if (nodeEnv === 'production' && String(jwtSecret).length < 32) {
   throw new Error('JWT_ACCESS_SECRET must be at least 32 characters in production');
 }
 
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+const clientUrls = [
+  clientUrl,
+  'https://gleeful-haupia-f0ede4.netlify.app',
+  ...(process.env.CLIENT_URLS || '').split(',').map((url) => url.trim()),
+].filter(Boolean);
+
 const env = {
   NODE_ENV: nodeEnv,
   PORT: Number(process.env.PORT || 5000),
-  CLIENT_URL: process.env.CLIENT_URL || 'http://localhost:3000',
+  CLIENT_URL: clientUrl,
+  CLIENT_URLS: [...new Set(clientUrls)],
   MONGO_URL: mongoUrl,
   JWT_ACCESS_SECRET: jwtSecret,
   JWT_REFRESH_SECRET: jwtRefreshSecret,
